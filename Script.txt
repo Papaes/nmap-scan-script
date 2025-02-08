@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# Função para verificar se o nmap está instalado
+check_nmap() {
+    if ! command -v nmap &> /dev/null; then
+        echo "O nmap não está instalado. Por favor, instale o nmap para continuar."
+        exit 1
+    fi
+}
+
+# Função para exibir o uso do script
+usage() {
+    echo "Uso: $0"
+    echo "Este script solicita interativamente as informações necessárias para análise."
+    exit 1
+}
+
+# Função para realizar a varredura e gerar relatórios
+scan_target() {
+    local alvo=$1
+    local timing=$2
+    local portas=$3
+    local vulns=$4
+
+    local file="scanning_${alvo}.txt"
+
+    echo "<html><body><h1>Relatório de Análise de $alvo</h1>" > "$file"
+
+    echo "<h2>Varredura de Portas TCP</h2>" >> "$file"
+    sudo nmap -T"$timing" -sS "$alvo" "$portas" -oN tmp_tcp.txt
+    cat tmp_tcp.txt >> "$file"
+
+    echo "<h2>Varredura de Portas UDP</h2>" >> "$file"
+    sudo nmap -T"$timing" -sU "$alvo" "$portas" -oN tmp_udp.txt
+    cat tmp_udp.txt >> "$file"
+
+    echo "<h2>Identificação de Serviços</h2>" >> "$file"
+    sudo nmap -T"$timing" -sV "$alvo" "$portas" -oN tmp_services.txt
+    cat tmp_services.txt >> "$file"
+
+    echo "<h2>Detecção do Sistema Operacional</h2>" >> "$file"
+    sudo nmap -T"$timing" -O "$alvo" -oN tmp_os.txt
+    cat tmp_os.txt >> "$file"
+
+    if [ "$vulns" = true ]; then
+        echo "<h2>Varredura de Vulnerabilidades</h2>" >> "$file"
+        sudo nmap -T"$timing" --script vuln "$alvo" "$portas" -oN tmp_vulns.txt
+        cat tmp_vulns.txt >> "$file"
+    fi
+
+    echo "</body></html>" >> "$file"
+
+    # Limpeza de arquivos temporários
+    rm tmp_tcp.txt tmp_udp.txt tmp_services.txt tmp_os.txt tmp_vulns.txt
+
+    echo "Scan concluído. Resultados salvos em $file"
+}
+
+# Solicita as entradas do usuário
+echo "Por favor, informe as seguintes informações:"
+
+echo -n "Alvo (ex: 192.168.1.1): "
+read alvo
+
+echo -n "Timing (0-5): "
+read timing
+
+echo -n "Portas específicas (opcional, ex: 80,443): "
+read portas_input
+
+echo -n "Deseja ativar a varredura de vulnerabilidades? (s/n): "
+read vulns_input
+
+# Configura variáveis com base na entrada do usuário
+portas=${portas_input:+-p $portas_input}
+vulns=false
+
+if [ "$vulns_input" = "s" ]; then
+    vulns=true
+fi
+
+# Verifica se os parâmetros obrigatórios foram fornecidos
+if [ -z "$alvo" ] || [ -z "$timing" ]; then
+    echo "O alvo e o timing são obrigatórios."
+    usage
+fi
+
+# Verifica se o valor de timing é válido
+if [[ ! "$timing" =~ ^[0-5]$ ]]; then
+    echo "O valor de timing deve estar entre 0 e 5."
+    exit 1
+fi
+
+# Executa a análise do alvo
+check_nmap
+scan_target "$alvo" "$timing" "$portas" "$vulns"
+
+
+
