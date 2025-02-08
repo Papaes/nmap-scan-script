@@ -3,7 +3,7 @@
 # Função para verificar se o nmap está instalado
 check_nmap() {
     if ! command -v nmap &> /dev/null; then
-        echo "O nmap não está instalado. Por favor, instale o nmap para continuar."
+        echo "O Nmap não está instalado. Por favor, instale o Nmap para continuar."
         exit 1
     fi
 }
@@ -22,60 +22,67 @@ scan_target() {
     local portas=$3
     local vulns=$4
 
-    local file="scanning_${alvo}.txt"
+    local file="relatorio_${alvo}.html"
 
-    echo "<html><body><h1>Relatório de Análise de $alvo</h1>" > "$file"
+    # Criando um relatório HTML formatado
+    echo "<html><head><title>Relatório de Análise - $alvo</title></head><body>" > "$file"
+    echo "<h1>Análise de Segurança - $alvo</h1>" >> "$file"
 
-    echo "<h2>Varredura de Portas TCP</h2>" >> "$file"
-    sudo nmap -T"$timing" -sS "$alvo" "$portas" -oN tmp_tcp.txt
-    cat tmp_tcp.txt >> "$file"
+    # Criando arquivos temporários seguros
+    local tmp_tcp=$(mktemp)
+    local tmp_udp=$(mktemp)
+    local tmp_services=$(mktemp)
+    local tmp_os=$(mktemp)
+    local tmp_vulns=$(mktemp)
 
-    echo "<h2>Varredura de Portas UDP</h2>" >> "$file"
-    sudo nmap -T"$timing" -sU "$alvo" "$portas" -oN tmp_udp.txt
-    cat tmp_udp.txt >> "$file"
+    echo "<h2>Varredura de Portas TCP</h2><pre>" >> "$file"
+    sudo nmap -T"$timing" -sS "$alvo" "$portas" -oN "$tmp_tcp"
+    cat "$tmp_tcp" >> "$file"
+    echo "</pre>" >> "$file"
 
-    echo "<h2>Identificação de Serviços</h2>" >> "$file"
-    sudo nmap -T"$timing" -sV "$alvo" "$portas" -oN tmp_services.txt
-    cat tmp_services.txt >> "$file"
+    echo "<h2>Varredura de Portas UDP</h2><pre>" >> "$file"
+    sudo nmap -T"$timing" -sU "$alvo" "$portas" -oN "$tmp_udp"
+    cat "$tmp_udp" >> "$file"
+    echo "</pre>" >> "$file"
 
-    echo "<h2>Detecção do Sistema Operacional</h2>" >> "$file"
-    sudo nmap -T"$timing" -O "$alvo" -oN tmp_os.txt
-    cat tmp_os.txt >> "$file"
+    echo "<h2>Identificação de Serviços</h2><pre>" >> "$file"
+    sudo nmap -T"$timing" -sV "$alvo" "$portas" -oN "$tmp_services"
+    cat "$tmp_services" >> "$file"
+    echo "</pre>" >> "$file"
+
+    echo "<h2>Detecção do Sistema Operacional</h2><pre>" >> "$file"
+    sudo nmap -T"$timing" -O "$alvo" -oN "$tmp_os"
+    cat "$tmp_os" >> "$file"
+    echo "</pre>" >> "$file"
 
     if [ "$vulns" = true ]; then
-        echo "<h2>Varredura de Vulnerabilidades</h2>" >> "$file"
-        sudo nmap -T"$timing" --script vuln "$alvo" "$portas" -oN tmp_vulns.txt
-        cat tmp_vulns.txt >> "$file"
+        echo "<h2>Varredura de Vulnerabilidades</h2><pre>" >> "$file"
+        sudo nmap -T"$timing" --script vuln "$alvo" "$portas" -oN "$tmp_vulns"
+        cat "$tmp_vulns" >> "$file"
+        echo "</pre>" >> "$file"
     fi
 
     echo "</body></html>" >> "$file"
 
     # Limpeza de arquivos temporários
-    rm tmp_tcp.txt tmp_udp.txt tmp_services.txt tmp_os.txt tmp_vulns.txt
+    rm -f "$tmp_tcp" "$tmp_udp" "$tmp_services" "$tmp_os" "$tmp_vulns"
 
-    echo "Scan concluído. Resultados salvos em $file"
+    echo "Scan concluído. Relatório salvo em: $file"
 }
 
 # Solicita as entradas do usuário
 echo "Por favor, informe as seguintes informações:"
 
-echo -n "Alvo (ex: 192.168.1.1): "
-read alvo
-
-echo -n "Timing (0-5): "
-read timing
-
-echo -n "Portas específicas (opcional, ex: 80,443): "
-read portas_input
-
-echo -n "Deseja ativar a varredura de vulnerabilidades? (s/n): "
-read vulns_input
+read -p "Alvo (ex: 192.168.1.1): " alvo
+read -p "Timing (0-5): " timing
+read -p "Portas específicas (opcional, ex: 80,443): " portas_input
+read -p "Deseja ativar a varredura de vulnerabilidades? (s/n): " vulns_input
 
 # Configura variáveis com base na entrada do usuário
 portas=${portas_input:+-p $portas_input}
 vulns=false
 
-if [ "$vulns_input" = "s" ]; then
+if [[ "$vulns_input" =~ ^[sS]$ ]]; then
     vulns=true
 fi
 
@@ -94,6 +101,3 @@ fi
 # Executa a análise do alvo
 check_nmap
 scan_target "$alvo" "$timing" "$portas" "$vulns"
-
-
-
